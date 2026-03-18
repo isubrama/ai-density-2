@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - MODEL_A_NAME=Llama 3.2 1B
+      - MODEL_A_URL=http://llama-a:8080
+      - MODEL_B_NAME=Qwen 3 0.6B
+      - MODEL_B_URL=http://llama-b:8080
+      - MODEL_C_NAME=Llama 3 8B
+      - MODEL_C_URL=http://llama-c:8080
+      - MODEL_D_NAME=Qwen 3 4B
+      - MODEL_D_URL=http://llama-d:8080
+    depends_on:
+      - llama-a
+      - llama-b
+      - llama-c
+      - llama-d
+
+  # Example llama.cpp service (repeat for B, C, D)
+  llama-a:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    command: "-m /models/llama-3.2-1b-q4_k_m.gguf -c 2048 --host 0.0.0.0 --port 8080"
+    volumes:
+      - ./models:/models
+    ports:
+      - "8081:8080"
+
+  llama-b:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    command: "-m /models/qwen-3-0.6b-q4_k_m.gguf -c 2048 --host 0.0.0.0 --port 8080"
+    volumes:
+      - ./models:/models
+    ports:
+      - "8082:8080"
+
+  llama-c:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    command: "-m /models/llama-3-8b-q4_k_m.gguf -c 2048 --host 0.0.0.0 --port 8080"
+    volumes:
+      - ./models:/models
+    ports:
+      - "8083:8080"
+
+  llama-d:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    command: "-m /models/qwen-3-4b-q4_k_m.gguf -c 2048 --host 0.0.0.0 --port 8080"
+    volumes:
+      - ./models:/models
+    ports:
+      - "8084:8080"
