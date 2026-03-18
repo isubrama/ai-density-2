@@ -22,6 +22,26 @@ interface GlobalStats {
   isStarted: boolean;
 }
 
+interface ChatbotItemProps {
+  id: number;
+  bot: ChatbotData | undefined;
+}
+
+const ChatbotItem: React.FC<ChatbotItemProps> = React.memo(({ id, bot }) => {
+  return (
+    <div className={`chatbot-item glass-inset ${bot?.isGenerating ? 'active' : ''}`}>
+      <div className="bot-meta">
+        <span className="bot-id">#{id + 1}</span>
+        <span className="bot-tps">{bot?.tps.toFixed(1)} <small>t/s</small></span>
+      </div>
+      <div className="bot-stream">
+        {bot?.fullResponse || <span className="placeholder">Awaiting inference...</span>}
+        {bot?.isGenerating && <span className="cursor"></span>}
+      </div>
+    </div>
+  );
+});
+
 const App: React.FC = () => {
   const [chatbots, setChatbots] = useState<Record<number, ChatbotData>>({});
   const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
@@ -166,19 +186,7 @@ const App: React.FC = () => {
             <div className="chatbot-list">
               {Array.from({ length: 5 }, (_, cIdx) => {
                 const id = gIdx * 5 + cIdx;
-                const bot = chatbots[id];
-                return (
-                  <div key={id} className={`chatbot-item glass-inset ${bot?.isGenerating ? 'active' : ''}`}>
-                    <div className="bot-meta">
-                      <span className="bot-id">#{id + 1}</span>
-                      <span className="bot-tps">{bot?.tps.toFixed(1)} <small>t/s</small></span>
-                    </div>
-                    <div className="bot-stream">
-                      {bot?.fullResponse || <span className="placeholder">Awaiting inference...</span>}
-                      {bot?.isGenerating && <span className="cursor"></span>}
-                    </div>
-                  </div>
-                );
+                return <ChatbotItem key={id} id={id} bot={chatbots[id]} />;
               })}
             </div>
           </div>
