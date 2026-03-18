@@ -61,14 +61,20 @@ export class InferenceManager {
   }
 
   private async runModelGroup(group: ModelGroupStats) {
-    // 5 unique prompts for each of the 5 chatbots
+    // Start all 5 chatbots in parallel, each running its own 5 rounds
+    await Promise.all(group.chatbots.map(chatbot => this.runChatbotRounds(group, chatbot)));
+    
+    // Final update after all rounds complete
+    group.aggregateTps = group.chatbots.reduce((sum, cb) => sum + cb.tps, 0);
+    this.updateGlobalStats();
+  }
+
+  private async runChatbotRounds(group: ModelGroupStats, chatbot: ChatbotStats) {
     for (let round = 0; round < 5; round++) {
       if (!this.globalStats.isStarted) break;
-
-      // Simultaneously issue 1 prompt to all 5 connected chatbots
-      await Promise.all(group.chatbots.map(chatbot => this.runChatbot(group, chatbot, round)));
+      await this.runChatbot(group, chatbot, round);
       
-      // Update group aggregate TPS after each round
+      // Update group aggregate TPS after each chatbot completes a round
       group.aggregateTps = group.chatbots.reduce((sum, cb) => sum + cb.tps, 0);
       this.updateGlobalStats();
     }
@@ -89,6 +95,7 @@ export class InferenceManager {
         n_predict: 256, // limit for PoC speed
       }, { responseType: 'stream' });
 
+      let buffer = '';
       return new Promise<void>((resolve, reject) => {
         response.data.on('data', (chunk: Buffer) => {
           if (!this.globalStats.isStarted) {
@@ -97,11 +104,15 @@ export class InferenceManager {
             return;
           }
 
-          const lines = chunk.toString().split('\n').filter(l => l.trim() !== '');
+          buffer += chunk.toString();
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep the last partial line in the buffer
+
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('data: ')) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const data = JSON.parse(trimmedLine.slice(6));
                 if (data.content) {
                   chatbot.lastToken = data.content;
                   chatbot.fullResponse += data.content;
@@ -130,7 +141,7 @@ export class InferenceManager {
                   resolve();
                 }
               } catch (e) {
-                // Ignore parse errors for partial chunks
+                // Ignore parse errors for malformed lines
               }
             }
           }
