@@ -10,10 +10,25 @@ export class InferenceManager {
   private modelGroups: ModelGroupStats[] = [];
   private globalStats: GlobalStats = { totalTps: 0, peakTps: 0, isStarted: false };
   private onUpdate: (data: any) => void;
+  private messageBuffer: any[] = [];
+  private flushInterval: NodeJS.Timeout | null = null;
 
   constructor(onUpdate: (data: any) => void) {
     this.onUpdate = onUpdate;
     this.initializeModelGroups();
+    this.startFlushTimer();
+  }
+
+  private startFlushTimer() {
+    this.flushInterval = setInterval(() => {
+      if (this.messageBuffer.length > 0) {
+        this.onUpdate({
+          type: 'BATCH_UPDATE',
+          payload: this.messageBuffer
+        });
+        this.messageBuffer = [];
+      }
+    }, 50); // Flush every 50ms
   }
 
   private initializeModelGroups() {
@@ -123,8 +138,8 @@ export class InferenceManager {
                   const durationSeconds = (chatbot.currentTime - chatbot.startTime) / 1000;
                   chatbot.tps = durationSeconds > 0 ? chatbot.totalTokens / durationSeconds : 0;
 
-                  // Stream update
-                  this.onUpdate({
+                  // Buffer the stream update
+                  this.messageBuffer.push({
                     type: 'TEXT_STREAM',
                     payload: {
                       chatbotId: chatbot.id,
@@ -174,7 +189,8 @@ export class InferenceManager {
       this.globalStats.peakTps = totalTps;
     }
 
-    this.onUpdate({
+    // Buffer the stats update
+    this.messageBuffer.push({
       type: 'STATS_UPDATE',
       payload: {
         totalTps: this.globalStats.totalTps,

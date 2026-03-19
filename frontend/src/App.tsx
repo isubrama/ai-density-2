@@ -79,39 +79,43 @@ const App: React.FC = () => {
       ws.current.onmessage = (event) => {
         const message = JSON.parse(event.data);
 
-        if (message.type === 'STATUS_CHANGE') {
-          setGlobalStats(prev => ({ ...prev, isStarted: message.payload.isStarted }));
-          if (!message.payload.isStarted) {
-            setChatbots(prev => {
-              const next = { ...prev };
-              Object.keys(next).forEach(id => {
-                next[Number(id)].isGenerating = false;
-              });
-              return next;
-            });
-          }
-        } else if (message.type === 'STATS_UPDATE') {
-          setGlobalStats(prev => ({
-            ...prev,
-            totalTps: message.payload.totalTps,
-            peakTps: message.payload.peakTps,
-          }));
-          setModelGroups(message.payload.modelGroups);
-        } else if (message.type === 'TEXT_STREAM') {
-          const { chatbotId, token, tps, totalTokens } = message.payload;
-          setChatbots(prev => ({
-            ...prev,
-            [chatbotId]: {
-              ...prev[chatbotId],
-              lastToken: token,
-              fullResponse: (prev[chatbotId].fullResponse + token).slice(-500), // Keep last 500 chars for performance
-              tps,
-              totalTokens,
-              isGenerating: true,
-            },
-          }));
-        }
-      };
+        if (message.type === 'BATCH_UPDATE') {
+          const batch = message.payload;
+          
+          setChatbots(prev => {
+            const next = { ...prev };
+            let hasTokenUpdate = false;
+            let lastStats = null;
+
+            for (const subMsg of batch) {
+              if (subMsg.type === 'TEXT_STREAM') {
+                const { chatbotId, token, tps, totalTokens } = subMsg.payload;
+                next[chatbotId] = {
+                  ...next[chatbotId],
+                  lastToken: token,
+                  fullResponse: (next[chatbotId].fullResponse + token).slice(-500),
+                  tps,
+                  totalTokens,
+                  isGenerating: true,
+                };
+                hasTokenUpdate = true;
+              } else if (subMsg.type === 'STATS_UPDATE') {
+                lastStats = subMsg.payload;
+              }
+            }
+
+            if (lastStats) {
+              setGlobalStats(prevStats => ({
+                ...prevStats,
+                totalTps: lastStats.totalTps,
+                peakTps: lastStats.peakTps,
+              }));
+              setModelGroups(lastStats.modelGroups);
+            }
+
+            return hasTokenUpdate ? next : prev;
+          });
+        } else if (message.type === 'STATUS_CHANGE') {
 
       ws.current.onclose = () => {
         setTimeout(connectWs, 3000); // Reconnect
